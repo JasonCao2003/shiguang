@@ -10,12 +10,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.nodes import _judge_answers  # noqa: PLC2701 - 复用核验判定
+from app.agents.nodes import generate_questions, judge_answers
 from app.api.deps import get_current_user
 from app.db.models import (
     Claim,
     ClaimStatus,
     ContactExchange,
+    Item,
     Match,
     RiskLevel,
     User,
@@ -33,6 +34,14 @@ from app.schemas.claim import (
 from app.services.llm import get_llm
 
 router = APIRouter(prefix="/claims", tags=["claims"])
+
+
+async def _resolve_found_item(session: AsyncSession, claim: Claim) -> Item | None:
+    """认领核验的比对基准是「拾获物品」的私密信息。"""
+    match = await session.get(Match, claim.match_id)
+    if match is None:
+        return None
+    return await session.get(Item, match.found_item_id)
 
 
 @router.post("", response_model=ClaimRead, status_code=status.HTTP_201_CREATED)
@@ -68,13 +77,13 @@ async def verify_claim(
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> VerificationResult:
-    """提交核验回答，由 deepseek-flash 判定；低置信/高风险转争议。"""
+    """提交核验回答，对照「拾获物品」私密信息判定；低置信/高风险转争议。"""
     claim = await session.get(Claim, claim_id)
     if claim is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "认领不存在")
 
-    verification = {"answers": [a.model_dump() for a in answers]}
-    result = await _judge_answers(get_llm(), verification)
+    item = await _resolve_found_item(session, claim)
+    result = await judge_answers(get_llm(), item, [a.model_dump() for a in answers])
 
     for a in answers:
         session.add(
@@ -139,11 +148,10 @@ async def get_questions(
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> list[VerificationQuestion]:
-    """生成核验问题（生产应基于物品非公开细节）。"""
+    """生成核验问题（基于「拾获物品」私密信息，问题不泄露答案）。"""
     claim = await session.get(Claim, claim_id)
     if claim is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "认领不存在")
-    from app.agents.nodes import _generate_questions
-
-    questions = await _generate_questions(get_llm(), str(claim.match_id))
+    item = await _resolve_found_item(session, claim)
+    questions = await generate_questions(get_llm(), item)
     return [VerificationQuestion(question=q) for q in questions]

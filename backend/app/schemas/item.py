@@ -49,6 +49,24 @@ class ItemRead(ORMModel):
     created_at: datetime
 
 
+class ItemPublicRead(ORMModel):
+    """公开视图：不含 description / distinguishing_features（核验基准，仅服务端）。"""
+
+    id: uuid.UUID
+    type: ItemType
+    reporter_id: uuid.UUID
+    title: str
+    category: str | None
+    brand: str | None
+    color: str | None
+    material: str | None
+    event_time: datetime | None
+    location_tag: str | None
+    status: ItemStatus
+    images: list[ItemImageRead] = Field(default_factory=list)
+    created_at: datetime
+
+
 class MatchRead(ORMModel):
     id: uuid.UUID
     lost_item_id: uuid.UUID

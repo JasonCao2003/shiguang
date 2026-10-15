@@ -9,10 +9,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_optional_user
 from app.db.models import Item, ItemImage, ItemStatus, ItemType, Match, User
 from app.db.session import get_session
-from app.schemas.item import ItemCreate, ItemRead, MatchRead
+from app.schemas.item import ItemCreate, ItemPublicRead, ItemRead, MatchRead
 from app.services.matching import find_and_store_matches
 
 router = APIRouter(prefix="/items", tags=["items"])
@@ -60,12 +60,13 @@ async def create_item(
     return item
 
 
-@router.get("", response_model=list[ItemRead])
+@router.get("", response_model=list[ItemPublicRead])
 async def list_items(
     session: Annotated[AsyncSession, Depends(get_session)],
     type: ItemType | None = None,
     limit: int = 50,
 ) -> list[Item]:
+    """公开浏览：仅返回公开字段（不含 description / distinguishing_features）。"""
     stmt = select(Item).where(Item.status != ItemStatus.removed)
     if type:
         stmt = stmt.where(Item.type == type)
@@ -73,20 +74,33 @@ async def list_items(
     return list((await session.execute(stmt)).scalars().all())
 
 
-@router.get("/{item_id}", response_model=ItemRead)
+@router.get("/{item_id}", response_model=None)
 async def get_item(
-    item_id: uuid.UUID, session: Annotated[AsyncSession, Depends(get_session)]
-) -> Item:
+    item_id: uuid.UUID,
+    user: Annotated[User | None, Depends(get_optional_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> ItemRead | ItemPublicRead:
+    """登记人可看完整信息，其他人仅见公开字段。"""
     item = await session.get(Item, item_id)
     if item is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "物品不存在")
-    return item
+    if user is not None and item.reporter_id == user.id:
+        return ItemRead.model_validate(item)
+    return ItemPublicRead.model_validate(item)
 
 
 @router.get("/{item_id}/matches", response_model=list[MatchRead])
 async def get_matches(
-    item_id: uuid.UUID, session: Annotated[AsyncSession, Depends(get_session)]
+    item_id: uuid.UUID,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
 ) -> list[Match]:
+    """仅登记人可查看该物品的匹配（匹配理由可能含私密细节）。"""
+    item = await session.get(Item, item_id)
+    if item is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "物品不存在")
+    if item.reporter_id != user.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "无权查看该物品的匹配")
     stmt = (
         select(Match)
         .where((Match.lost_item_id == item_id) | (Match.found_item_id == item_id))

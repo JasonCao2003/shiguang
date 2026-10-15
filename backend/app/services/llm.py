@@ -10,6 +10,7 @@ DeepSeek 兼容 OpenAI 协议，Base URL 为 https://api.deepseek.com。
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncIterator
 from typing import Any
 
 from openai import AsyncOpenAI
@@ -71,6 +72,29 @@ class DeepSeekClient:
         except json.JSONDecodeError:
             logger.warning("DeepSeek 返回非法 JSON: %s", raw[:200])
             return {}
+
+    async def stream(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        model: str | None = None,
+        temperature: float = 0.2,
+        thinking: bool | None = None,
+    ) -> AsyncIterator[str]:
+        """流式生成，逐块产出文本增量。"""
+        stream = await self._client.chat.completions.create(
+            model=model or self.model,
+            messages=messages,
+            temperature=temperature,
+            stream=True,
+            extra_body=self._extra_body(thinking),
+        )
+        async for chunk in stream:
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta.content
+            if delta:
+                yield delta
 
     async def describe_image(
         self, prompt: str, image_urls: list[str], *, thinking: bool | None = None
