@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token, hash_password, verify_password
@@ -22,9 +22,13 @@ async def register(
 ) -> User:
     if not payload.email and not payload.phone:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "需要邮箱或手机号")
-    existing = await session.execute(
-        select(User).where((User.email == payload.email) | (User.phone == payload.phone))
-    )
+    # 仅在已提供的字段上做去重，避免 email/phone 为空时误判
+    conditions = []
+    if payload.email:
+        conditions.append(User.email == payload.email)
+    if payload.phone:
+        conditions.append(User.phone == payload.phone)
+    existing = await session.execute(select(User).where(or_(*conditions)))
     if existing.scalar_one_or_none() is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, "用户已存在")
     user = User(
