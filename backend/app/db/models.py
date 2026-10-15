@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import enum
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
@@ -158,7 +158,9 @@ class VerificationQA(Base):
     answer: Mapped[str | None] = mapped_column(Text)
     judgement: Mapped[str | None] = mapped_column(Text)
     confidence: Mapped[float | None] = mapped_column(Float)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
 
 
 class ContactExchange(Base):
@@ -182,7 +184,9 @@ class Notification(Base):
     template: Mapped[str] = mapped_column(String(64))
     payload: Mapped[dict | None] = mapped_column(JSONB)
     status: Mapped[str] = mapped_column(String(16), default="pending")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
 
 
 class AuditLog(Base):
@@ -194,7 +198,9 @@ class AuditLog(Base):
     target_type: Mapped[str | None] = mapped_column(String(64))
     target_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     detail: Mapped[dict | None] = mapped_column(JSONB)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
 
 
 class PurgeJob(Base):
