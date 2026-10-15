@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     app_name: str = "Find"
     environment: str = "dev"
     debug: bool = True
+    # 是否打印 SQL（与 debug 解耦，避免日志刷屏）
+    db_echo: bool = False
+    log_level: str = "INFO"
     api_prefix: str = "/api"
 
     # 数据库

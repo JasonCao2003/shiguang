@@ -18,7 +18,7 @@ logger = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    setup_logging("DEBUG" if settings.debug else "INFO")
+    setup_logging(settings.log_level)
     logger.info("启动 %s v%s (env=%s)", settings.app_name, __version__, settings.environment)
     try:
         from app.services.storage import ensure_bucket

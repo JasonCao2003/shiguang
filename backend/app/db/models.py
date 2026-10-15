@@ -25,6 +25,11 @@ from app.core.config import settings
 from app.db.base import Base, TimestampMixin
 
 
+def values_callable(enum_cls: type[enum.Enum]) -> list[str]:
+    """让 SQLAlchemy 用枚举的 value（而非成员名）与数据库枚举对齐。"""
+    return [member.value for member in enum_cls]
+
+
 class UserRole(str, enum.Enum):
     owner = "owner"  # 失主
     finder = "finder"  # 拾获者
@@ -68,7 +73,9 @@ class User(Base, TimestampMixin):
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    role: Mapped[UserRole] = mapped_column(SAEnum(UserRole), default=UserRole.owner)
+    role: Mapped[UserRole] = mapped_column(
+        SAEnum(UserRole, values_callable=values_callable), default=UserRole.owner
+    )
     name: Mapped[str | None] = mapped_column(String(120))
     email: Mapped[str | None] = mapped_column(String(255), unique=True, index=True)
     phone: Mapped[str | None] = mapped_column(String(32), unique=True, index=True)
@@ -82,7 +89,9 @@ class Item(Base, TimestampMixin):
     __tablename__ = "items"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    type: Mapped[ItemType] = mapped_column(SAEnum(ItemType), index=True)
+    type: Mapped[ItemType] = mapped_column(
+        SAEnum(ItemType, values_callable=values_callable), index=True
+    )
     reporter_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
 
     category: Mapped[str | None] = mapped_column(String(64))
@@ -97,7 +106,9 @@ class Item(Base, TimestampMixin):
     distinguishing_features: Mapped[str | None] = mapped_column(Text)
 
     status: Mapped[ItemStatus] = mapped_column(
-        SAEnum(ItemStatus), default=ItemStatus.active, index=True
+        SAEnum(ItemStatus, values_callable=values_callable),
+        default=ItemStatus.active,
+        index=True,
     )
     embedding: Mapped[list[float] | None] = mapped_column(Vector(settings.embedding_dim))
     # 认领成功后用于定时清理
@@ -130,7 +141,9 @@ class Match(Base, TimestampMixin):
     found_item_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("items.id"))
     score: Mapped[float] = mapped_column(Float)
     reason: Mapped[str | None] = mapped_column(Text)
-    status: Mapped[MatchStatus] = mapped_column(SAEnum(MatchStatus), default=MatchStatus.pending)
+    status: Mapped[MatchStatus] = mapped_column(
+        SAEnum(MatchStatus, values_callable=values_callable), default=MatchStatus.pending
+    )
 
     __table_args__ = (
         UniqueConstraint("lost_item_id", "found_item_id", name="uq_match_pair"),
@@ -144,8 +157,12 @@ class Claim(Base, TimestampMixin):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     match_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("matches.id"))
     claimant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
-    status: Mapped[ClaimStatus] = mapped_column(SAEnum(ClaimStatus), default=ClaimStatus.verifying)
-    risk_level: Mapped[RiskLevel] = mapped_column(SAEnum(RiskLevel), default=RiskLevel.low)
+    status: Mapped[ClaimStatus] = mapped_column(
+        SAEnum(ClaimStatus, values_callable=values_callable), default=ClaimStatus.verifying
+    )
+    risk_level: Mapped[RiskLevel] = mapped_column(
+        SAEnum(RiskLevel, values_callable=values_callable), default=RiskLevel.low
+    )
     confidence: Mapped[float | None] = mapped_column(Float)
 
 

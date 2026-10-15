@@ -19,8 +19,17 @@ def setup_logging(level: str = "INFO") -> None:
     root.addHandler(handler)
     root.setLevel(level.upper())
 
-    # 降噪
-    for noisy in ("httpx", "httpcore", "botocore", "urllib3"):
+    # 降噪：第三方库统一抬到 WARNING
+    for noisy in (
+        "httpx",
+        "httpx2",
+        "httpcore",
+        "httpcore2",
+        "openai",
+        "botocore",
+        "urllib3",
+        "asyncio",
+    ):
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
