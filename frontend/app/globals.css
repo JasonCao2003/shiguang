@@ -91,4 +91,128 @@ button:disabled {
 .score {
   color: #22c55e;
   font-weight: 600;
+  margin-right: 8px;
 }
+
+/* 顶栏 */
+.topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+button.ghost {
+  margin-top: 0;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+/* 标签页 */
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+button.tab {
+  margin-top: 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+button.tab.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* 物品列表 */
+ul.items {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+}
+
+ul.items li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+
+ul.items li:last-child {
+  border-bottom: none;
+}
+
+.badge {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.badge.lost {
+  background: #7f1d1d;
+  color: #fecaca;
+}
+
+.badge.found {
+  background: #14532d;
+  color: #bbf7d0;
+}
+
+/* 认证卡片 */
+.card.auth {
+  max-width: 420px;
+  margin: 80px auto;
+}
+
+.switch {
+  cursor: pointer;
+  margin-top: 14px;
+  font-size: 13px;
+}
+
+.error {
+  color: #f87171;
+  font-size: 13px;
+  margin-top: 10px;
+}
+
+/* 对话 */
+.chatbox {
+  max-height: 340px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 0 12px;
+}
+
+.bubble {
+  max-width: 85%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.bubble.user {
+  align-self: flex-end;
+  background: var(--accent);
+  color: #fff;
+}
+
+.bubble.assistant {
+  align-self: flex-start;
+  background: #0d1117;
+  border: 1px solid var(--border);
+}
+

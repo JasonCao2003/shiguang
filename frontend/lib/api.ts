@@ -1,5 +1,42 @@
 const BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
 
+// ─────────────── 令牌 ───────────────
+
+const TOKEN_KEY = "find_token";
+
+export function getToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(TOKEN_KEY);
+}
+
+export function setToken(token: string): void {
+  window.localStorage.setItem(TOKEN_KEY, token);
+}
+
+export function clearToken(): void {
+  window.localStorage.removeItem(TOKEN_KEY);
+}
+
+function authHeaders(): Record<string, string> {
+  const token = getToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+async function ensureOk(res: Response, action: string): Promise<void> {
+  if (!res.ok) {
+    let detail = `${res.status}`;
+    try {
+      const body = await res.json();
+      if (body?.detail) detail = String(body.detail);
+    } catch {
+      /* ignore */
+    }
+    throw new Error(`${action}失败：${detail}`);
+  }
+}
+
+// ─────────────── 类型 ───────────────
+
 export type Match = {
   id: string;
   lost_item_id: string;
@@ -8,21 +45,48 @@ export type Match = {
   reason: string | null;
 };
 
-export type ChatResponse = {
-  thread_id: string;
-  reply: string;
-  intent: string | null;
-  item_id: string | null;
-  matches: Match[];
+export type Item = {
+  id: string;
+  type: "LOST" | "FOUND";
+  title: string;
+  category?: string | null;
+  color?: string | null;
+  location_tag?: string | null;
+  status: string;
+  created_at: string;
+  // 仅登记人可见
+  description?: string | null;
+  distinguishing_features?: string | null;
 };
 
-export async function chat(message: string, threadId?: string): Promise<ChatResponse> {
-  const res = await fetch(`${BASE}/api/chat`, {
+// ─────────────── 认证 ───────────────
+
+export async function register(email: string, password: string, name: string): Promise<void> {
+  const res = await fetch(`${BASE}/api/auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, thread_id: threadId }),
+    body: JSON.stringify({ email, password, name }),
   });
-  if (!res.ok) throw new Error(`chat 失败: ${res.status}`);
+  await ensureOk(res, "注册");
+}
+
+export async function login(email: string, password: string): Promise<string> {
+  const res = await fetch(`${BASE}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  await ensureOk(res, "登录");
+  const data = await res.json();
+  setToken(data.access_token);
+  return data.access_token as string;
+}
+
+// ─────────────── 物品 ───────────────
+
+export async function listItems(): Promise<Item[]> {
+  const res = await fetch(`${BASE}/api/items`, { cache: "no-store" });
+  await ensureOk(res, "获取列表");
   return res.json();
 }
 
@@ -33,18 +97,77 @@ export type ItemCreate = {
   location_tag?: string;
 };
 
-export async function createItem(payload: ItemCreate) {
+export async function createItem(payload: ItemCreate): Promise<Item> {
   const res = await fetch(`${BASE}/api/items`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error(`登记失败: ${res.status}`);
+  await ensureOk(res, "登记");
   return res.json();
 }
 
-export async function listItems() {
-  const res = await fetch(`${BASE}/api/items`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`获取列表失败: ${res.status}`);
+export async function getMatches(itemId: string): Promise<Match[]> {
+  const res = await fetch(`${BASE}/api/items/${itemId}/matches`, {
+    headers: authHeaders(),
+  });
+  await ensureOk(res, "获取匹配");
   return res.json();
+}
+
+// ─────────────── 对话（SSE） ───────────────
+
+export type StreamHandlers = {
+  onMeta?: (meta: { thread_id: string; matches: Match[] }) => void;
+  onDelta?: (text: string) => void;
+  onDone?: () => void;
+  onError?: (message: string) => void;
+};
+
+export async function chatStream(
+  message: string,
+  handlers: StreamHandlers,
+  threadId?: string,
+): Promise<void> {
+  const res = await fetch(`${BASE}/api/chat/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ message, thread_id: threadId }),
+  });
+  if (!res.ok || !res.body) {
+    throw new Error(`对话失败：${res.status}`);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const blocks = buffer.split("\n\n");
+    buffer = blocks.pop() ?? "";
+    for (const block of blocks) {
+      const event = /^event: (.+)$/m.exec(block)?.[1]?.trim();
+      const dataLine = /^data: (.+)$/m.exec(block)?.[1]?.trim();
+      if (!event || !dataLine) continue;
+      let data: Record<string, unknown> = {};
+      try {
+        data = JSON.parse(dataLine);
+      } catch {
+        continue;
+      }
+      if (event === "meta") {
+        handlers.onMeta?.(data as { thread_id: string; matches: Match[] });
+      } else if (event === "delta") {
+        handlers.onDelta?.(String(data.delta ?? ""));
+      } else if (event === "done") {
+        handlers.onDone?.();
+      } else if (event === "error") {
+        handlers.onError?.(String(data.message ?? "未知错误"));
+      }
+    }
+  }
 }
