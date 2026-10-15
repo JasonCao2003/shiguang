@@ -143,6 +143,68 @@ ul.items li {
   padding: 10px 0;
   border-bottom: 1px solid var(--border);
   font-size: 14px;
+  flex-wrap: wrap;
+}
+
+.reason {
+  flex: 1;
+  min-width: 200px;
+}
+
+button.mini {
+  margin-top: 0;
+  padding: 4px 10px;
+  font-size: 12px;
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: #93c5fd;
+}
+
+/* 核验结果 */
+.resultbox {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.resultbox p {
+  margin: 8px 0 0;
+  line-height: 1.6;
+}
+
+.resultbox.pass {
+  border-color: #166534;
+  background: #0b1f14;
+}
+
+.resultbox.fail {
+  border-color: #7f1d1d;
+  background: #1f0d0d;
+}
+
+/* 认领状态徽标 */
+.badge.st-verifying {
+  background: #1e3a8a;
+  color: #bfdbfe;
+}
+.badge.st-passed,
+.badge.st-contacted {
+  background: #14532d;
+  color: #bbf7d0;
+}
+.badge.st-rejected {
+  background: #7f1d1d;
+  color: #fecaca;
+}
+.badge.st-disputed {
+  background: #78350f;
+  color: #fde68a;
+}
+.badge.st-initiated {
+  background: #334155;
+  color: #cbd5e1;
 }
 
 ul.items li:last-child {

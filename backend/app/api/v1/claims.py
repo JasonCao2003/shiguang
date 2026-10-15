@@ -36,6 +36,21 @@ from app.services.llm import get_llm
 router = APIRouter(prefix="/claims", tags=["claims"])
 
 
+@router.get("", response_model=list[ClaimRead])
+async def list_my_claims(
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> list[Claim]:
+    """当前用户发起的认领列表。"""
+    stmt = (
+        select(Claim)
+        .where(Claim.claimant_id == user.id)
+        .order_by(Claim.created_at.desc())
+        .limit(50)
+    )
+    return list((await session.execute(stmt)).scalars().all())
+
+
 async def _resolve_found_item(session: AsyncSession, claim: Claim) -> Item | None:
     """认领核验的比对基准是「拾获物品」的私密信息。"""
     match = await session.get(Match, claim.match_id)

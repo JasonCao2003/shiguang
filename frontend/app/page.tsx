@@ -5,14 +5,22 @@ import { useEffect, useRef, useState } from "react";
 import {
   chatStream,
   clearToken,
+  createClaim,
   createItem,
+  exchangeContacts,
   getMatches,
+  getQuestions,
   getToken,
   type Item,
+  listClaims,
   listItems,
   login,
   type Match,
   register,
+  type Claim as ClaimT,
+  type ContactExchange,
+  type VerificationResult,
+  verifyClaim,
 } from "@/lib/api";
 
 export default function Home() {
@@ -116,27 +124,38 @@ function Auth({ onDone }: { onDone: () => void }) {
 
 // ────────────────────────── 标签页 ──────────────────────────
 
+type TabKey = "browse" | "report" | "chat" | "claim";
+
 function Tabs() {
-  const [tab, setTab] = useState<"browse" | "report" | "chat">("browse");
-  const labels = { browse: "浏览", report: "登记", chat: "对话" } as const;
+  const [tab, setTab] = useState<TabKey>("browse");
+  const [claimMatch, setClaimMatch] = useState<Match | null>(null);
+
+  function startClaim(m: Match) {
+    setClaimMatch(m);
+    setTab("claim");
+  }
+
+  const labels: Record<TabKey, string> = {
+    browse: "浏览",
+    report: "登记",
+    chat: "对话",
+    claim: "认领",
+  };
 
   return (
     <>
       <nav className="tabs">
-        {(["browse", "report", "chat"] as const).map((t) => (
-          <button
-            key={t}
-            className={tab === t ? "tab active" : "tab"}
-            onClick={() => setTab(t)}
-          >
+        {(["browse", "report", "chat", "claim"] as const).map((t) => (
+          <button key={t} className={tab === t ? "tab active" : "tab"} onClick={() => setTab(t)}>
             {labels[t]}
           </button>
         ))}
       </nav>
 
       {tab === "browse" && <Browse />}
-      {tab === "report" && <Report />}
-      {tab === "chat" && <Chat />}
+      {tab === "report" && <Report onClaim={startClaim} />}
+      {tab === "chat" && <Chat onClaim={startClaim} />}
+      {tab === "claim" && <ClaimFlow match={claimMatch} />}
     </>
   );
 }
@@ -172,16 +191,32 @@ function Browse() {
           </li>
         ))}
       </ul>
-      <p className="muted">
-        说明：公开列表不含物品的描述与显著特征，这些信息仅用于核验比对。
-      </p>
+      <p className="muted">说明：公开列表不含物品的描述与显著特征，这些信息仅用于核验比对。</p>
     </div>
   );
 }
 
 // ────────────────────────── 登记 ──────────────────────────
 
-function Report() {
+function MatchList({ matches, onClaim }: { matches: Match[]; onClaim?: (m: Match) => void }) {
+  return (
+    <ul className="items">
+      {matches.map((m) => (
+        <li key={m.id}>
+          <span className="score">{m.score.toFixed(2)}</span>
+          <span className="reason">{m.reason}</span>
+          {onClaim && (
+            <button className="mini" onClick={() => onClaim(m)}>
+              发起认领
+            </button>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function Report({ onClaim }: { onClaim: (m: Match) => void }) {
   const [type, setType] = useState<"LOST" | "FOUND">("LOST");
   const [title, setTitle] = useState("");
   const [desc, setDesc] = useState("");
@@ -242,14 +277,7 @@ function Report() {
           ) : (
             <>
               <p className="muted">找到 {result.matches.length} 个候选匹配：</p>
-              <ul className="items">
-                {result.matches.map((m) => (
-                  <li key={m.id}>
-                    <span className="score">{m.score.toFixed(2)}</span>
-                    <span>{m.reason}</span>
-                  </li>
-                ))}
-              </ul>
+              <MatchList matches={result.matches} onClaim={onClaim} />
             </>
           )}
         </div>
@@ -262,7 +290,7 @@ function Report() {
 
 type Msg = { role: "user" | "assistant"; text: string };
 
-function Chat() {
+function Chat({ onClaim }: { onClaim: (m: Match) => void }) {
   const [threadId, setThreadId] = useState<string | undefined>();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -314,22 +342,13 @@ function Chat() {
       {matches.length > 0 && (
         <div className="card">
           <strong>为你找到的匹配</strong>
-          <ul className="items">
-            {matches.map((m) => (
-              <li key={m.id}>
-                <span className="score">{m.score.toFixed(2)}</span>
-                <span>{m.reason}</span>
-              </li>
-            ))}
-          </ul>
+          <MatchList matches={matches} onClaim={onClaim} />
         </div>
       )}
 
       <div className="card chat">
         <div className="chatbox" ref={boxRef}>
-          {messages.length === 0 && (
-            <p className="muted">试试问：“我丢的黑色钱包有消息吗？”</p>
-          )}
+          {messages.length === 0 && <p className="muted">试试问：“我丢的黑色钱包有消息吗？”</p>}
           {messages.map((m, i) => (
             <div key={i} className={m.role === "user" ? "bubble user" : "bubble assistant"}>
               {m.text || (busy && i === messages.length - 1 ? "▍" : "")}
@@ -352,6 +371,192 @@ function Chat() {
         <button onClick={send} disabled={busy || !input.trim()}>
           {busy ? "回复中…" : "发送"}
         </button>
+      </div>
+    </>
+  );
+}
+
+// ────────────────────────── 认领 / 核验 ──────────────────────────
+
+const STATUS_LABEL: Record<ClaimT["status"], string> = {
+  initiated: "已发起",
+  verifying: "核验中",
+  passed: "核验通过",
+  rejected: "已拒绝",
+  disputed: "转人工复核",
+  contacted: "已交换联系方式",
+};
+
+function ClaimFlow({ match }: { match: Match | null }) {
+  const [claim, setClaim] = useState<ClaimT | null>(null);
+  const [questions, setQuestions] = useState<string[]>([]);
+  const [answers, setAnswers] = useState<string[]>([]);
+  const [result, setResult] = useState<VerificationResult | null>(null);
+  const [exchange, setExchange] = useState<ContactExchange | null>(null);
+  const [mine, setMine] = useState<ClaimT[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  function refreshMine() {
+    listClaims()
+      .then(setMine)
+      .catch(() => undefined);
+  }
+
+  useEffect(refreshMine, []);
+
+  // 从别的标签页带过来一个匹配 → 重新开始流程
+  useEffect(() => {
+    setClaim(null);
+    setQuestions([]);
+    setAnswers([]);
+    setResult(null);
+    setExchange(null);
+    setErr("");
+  }, [match?.id]);
+
+  async function begin() {
+    if (!match) return;
+    setBusy(true);
+    setErr("");
+    try {
+      const c = await createClaim(match.id);
+      setClaim(c);
+      const qs = await getQuestions(c.id);
+      setQuestions(qs);
+      setAnswers(qs.map(() => ""));
+      refreshMine();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submit() {
+    if (!claim) return;
+    setBusy(true);
+    setErr("");
+    try {
+      const r = await verifyClaim(
+        claim.id,
+        questions.map((q, i) => ({ question: q, answer: answers[i] ?? "" })),
+      );
+      setResult(r);
+      refreshMine();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function doExchange() {
+    if (!claim) return;
+    setBusy(true);
+    setErr("");
+    try {
+      setExchange(await exchangeContacts(claim.id));
+      refreshMine();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      {match && (
+        <div className="card">
+          <strong>发起认领</strong>
+          <p className="muted">
+            匹配度 <span className="score">{match.score.toFixed(2)}</span>
+            {match.reason}
+          </p>
+
+          {!claim && (
+            <button onClick={begin} disabled={busy}>
+              {busy ? "发起中…" : "发起认领并开始核验"}
+            </button>
+          )}
+
+          {claim && !result && (
+            <>
+              <p className="muted">为确认所有权，请如实回答（问题不会透露物品细节）：</p>
+              {questions.map((q, i) => (
+                <div key={i}>
+                  <label>{q}</label>
+                  <textarea
+                    rows={2}
+                    value={answers[i] ?? ""}
+                    onChange={(e) => {
+                      const copy = [...answers];
+                      copy[i] = e.target.value;
+                      setAnswers(copy);
+                    }}
+                  />
+                </div>
+              ))}
+              <button onClick={submit} disabled={busy}>
+                {busy ? "核验中…" : "提交核验"}
+              </button>
+            </>
+          )}
+
+          {result && (
+            <div className={`resultbox ${result.passed ? "pass" : "fail"}`}>
+              <b>{result.passed ? "核验通过" : "核验未通过"}</b>
+              <span className="muted">
+                {" "}
+                · 置信度 {result.confidence.toFixed(2)} · 风险 {result.risk_level}
+              </span>
+              <p>{result.judgement}</p>
+              {result.passed && !exchange && (
+                <button onClick={doExchange} disabled={busy}>
+                  {busy ? "处理中…" : "同意并交换联系方式"}
+                </button>
+              )}
+              {!result.passed && (
+                <p className="muted">已转入人工复核，管理员会进一步核实。</p>
+              )}
+            </div>
+          )}
+
+          {exchange && (
+            <div className="resultbox pass">
+              <b>已交换联系方式</b>
+              <p>
+                你：{exchange.lost_contact ?? "—"}
+                <br />
+                对方：{exchange.found_contact ?? "待对方同意"}
+              </p>
+              <p className="muted">请自行约定在校园公共区域见面交接。</p>
+            </div>
+          )}
+
+          {err && <p className="error">{err}</p>}
+        </div>
+      )}
+
+      <div className="card">
+        <strong>我的认领</strong>
+        {mine.length === 0 ? (
+          <p className="muted">
+            还没有认领记录。可在「登记」结果或「对话」的匹配里点击「发起认领」。
+          </p>
+        ) : (
+          <ul className="items">
+            {mine.map((c) => (
+              <li key={c.id}>
+                <span className={`badge st-${c.status}`}>{STATUS_LABEL[c.status]}</span>
+                <span className="muted">
+                  信心 {c.confidence != null ? c.confidence.toFixed(2) : "—"} · 风险 {c.risk_level}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </>
   );

@@ -115,6 +115,80 @@ export async function getMatches(itemId: string): Promise<Match[]> {
   return res.json();
 }
 
+// ─────────────── 认领 / 核验 ───────────────
+
+export type Claim = {
+  id: string;
+  match_id: string;
+  claimant_id: string;
+  status: "initiated" | "verifying" | "passed" | "rejected" | "disputed" | "contacted";
+  risk_level: "low" | "medium" | "high";
+  confidence: number | null;
+};
+
+export type VerificationResult = {
+  passed: boolean;
+  confidence: number;
+  risk_level: "low" | "medium" | "high";
+  judgement: string;
+};
+
+export type ContactExchange = {
+  id: string;
+  claim_id: string;
+  lost_contact: string | null;
+  found_contact: string | null;
+  consent_lost: boolean;
+  consent_found: boolean;
+};
+
+export async function listClaims(): Promise<Claim[]> {
+  const res = await fetch(`${BASE}/api/claims`, { headers: authHeaders() });
+  await ensureOk(res, "获取认领列表");
+  return res.json();
+}
+
+export async function createClaim(matchId: string): Promise<Claim> {
+  const res = await fetch(`${BASE}/api/claims`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ match_id: matchId }),
+  });
+  await ensureOk(res, "发起认领");
+  return res.json();
+}
+
+export async function getQuestions(claimId: string): Promise<string[]> {
+  const res = await fetch(`${BASE}/api/claims/${claimId}/questions`, {
+    headers: authHeaders(),
+  });
+  await ensureOk(res, "获取核验问题");
+  const items: { question: string }[] = await res.json();
+  return items.map((q) => q.question);
+}
+
+export async function verifyClaim(
+  claimId: string,
+  answers: { question: string; answer: string }[],
+): Promise<VerificationResult> {
+  const res = await fetch(`${BASE}/api/claims/${claimId}/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(answers),
+  });
+  await ensureOk(res, "提交核验");
+  return res.json();
+}
+
+export async function exchangeContacts(claimId: string): Promise<ContactExchange> {
+  const res = await fetch(`${BASE}/api/claims/${claimId}/exchange-contacts?consent=true`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  await ensureOk(res, "交换联系方式");
+  return res.json();
+}
+
 // ─────────────── 对话（SSE） ───────────────
 
 export type StreamHandlers = {
