@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Find — 校园失物招领",
+  title: "拾光 ShiGuang — 校园失物招领",
   description: "AI 智能匹配的校园失物招领平台",
 };
 

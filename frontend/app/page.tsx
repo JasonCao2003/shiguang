@@ -45,7 +45,7 @@ export default function Home() {
     <main className="container">
       <header className="topbar">
         <div>
-          <h1>Find · 校园失物招领</h1>
+          <h1>拾光 · 校园失物招领</h1>
           <p className="muted">AI 智能匹配 · 对话助手</p>
         </div>
         <button className="ghost" onClick={logout}>

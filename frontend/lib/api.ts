@@ -2,7 +2,7 @@ const BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
 
 // ─────────────── 令牌 ───────────────
 
-const TOKEN_KEY = "find_token";
+const TOKEN_KEY = "shiguang_token";
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;

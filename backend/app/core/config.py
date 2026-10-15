@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # 应用
-    app_name: str = "Find"
+    app_name: str = "拾光"
     environment: str = "dev"
     debug: bool = True
     # 是否打印 SQL（与 debug 解耦，避免日志刷屏）
@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     api_prefix: str = "/api"
 
     # 数据库
-    database_url: str = "postgresql+asyncpg://find:find@localhost:5432/find"
+    database_url: str = "postgresql+asyncpg://shiguang:shiguang@localhost:5432/shiguang"
 
     # Redis
     redis_url: str = "redis://localhost:6379/0"
@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     s3_endpoint: str = "http://localhost:9000"
     s3_access_key: str = "minioadmin"
     s3_secret_key: str = "minioadmin"
-    s3_bucket: str = "find-media"
+    s3_bucket: str = "shiguang-media"
     s3_region: str = "us-east-1"
     s3_public_base: str = "http://localhost:9000"
     # 本地存储后端（STORAGE_BACKEND=local 时生效）

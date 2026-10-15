@@ -1,6 +1,10 @@
-# Find — 校园失物招领平台（AI Agent）
+# 拾光 ShiGuang · 校园失物招领平台（AI Agent）
+
+> 拾起失物，送回主人身边 —— 面向校园场景的 AI 失物招领平台。
 
 用语义/多模态匹配把「丢失描述」与「拾获招领」智能配对，并用多智能体完成核验、认领与联系交换。
+
+**技术栈**：FastAPI · LangGraph · DeepSeek API · BGE-M3 · Postgres + pgvector · Next.js
 
 > 完整需求见 [`docs/PDR.md`](docs/PDR.md)。
 
@@ -29,7 +33,7 @@
 ## 目录结构
 
 ```
-Find/
+shiguang/
 ├── backend/                 # FastAPI + LangGraph
 │   ├── app/
 │   │   ├── agents/          # LangGraph 图与节点

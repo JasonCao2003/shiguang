@@ -1,7 +1,7 @@
 [project]
-name = "find-backend"
+name = "shiguang-backend"
 version = "0.1.0"
-description = "Find — 校园失物招领平台后端（FastAPI + LangGraph）"
+description = "拾光 ShiGuang — 校园失物招领平台后端（FastAPI + LangGraph）"
 requires-python = ">=3.11,<3.14"
 dependencies = [
     # Web

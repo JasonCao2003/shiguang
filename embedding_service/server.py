@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
 
 
-app = FastAPI(title="Find Embedding Service", lifespan=lifespan)
+app = FastAPI(title="拾光 Embedding Service", lifespan=lifespan)
 
 
 class EmbedRequest(BaseModel):
