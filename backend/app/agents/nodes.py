@@ -19,6 +19,7 @@ from app.db.models import Item, ItemImage, ItemStatus, ItemType, Match, MatchSta
 from app.db.session import SessionLocal
 from app.services.llm import get_llm
 from app.services.matching import find_and_store_matches
+from app.services.vision import caption_images
 
 logger = get_logger(__name__)
 
@@ -74,13 +75,19 @@ async def intake_node(state: AgentState) -> AgentState:
         distinguishing_features=parsed.get("distinguishing_features") or None,
         status=ItemStatus.active,
     )
-    captions = [parsed["caption"]] if parsed.get("caption") else []
-    item.embedding = await embed_item(item, captions)
+    captions = await caption_images(state.get("image_urls") or [])
+    item.embedding = await embed_item(item, [c for c in captions if c])
 
     async with SessionLocal() as session:
         session.add(item)
-        for url in state.get("image_urls", []):
-            session.add(ItemImage(item_id=item.id, url=url, caption=parsed.get("caption")))
+        from app.services.embedding import get_embedder
+
+        embedder = get_embedder()
+        for url, caption in zip(state.get("image_urls") or [], captions, strict=False):
+            image = ItemImage(item_id=item.id, url=url, caption=caption or None)
+            if caption:
+                image.embedding = await embedder.embed_one(caption)
+            session.add(image)
         await session.flush()
         matches = await find_and_store_matches(session, item)
         await session.commit()

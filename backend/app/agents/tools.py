@@ -11,6 +11,7 @@ from app.db.models import Item
 from app.services.embedding import get_embedder
 from app.services.llm import DeepSeekClient
 from app.services.matching import recall_candidates, rerank
+from app.services.vision import to_model_images
 
 _PARSE_SYSTEM = (
     "你是失物招领登记助手。根据用户描述与图片，抽取结构化字段，只输出 JSON。\n"
@@ -30,11 +31,12 @@ async def parse_item(
     llm: DeepSeekClient, text: str, image_urls: list[str] | None = None
 ) -> dict[str, Any]:
     """Intake Agent：解析结构化字段（deepseek-flash，支持图片）。"""
-    if image_urls:
+    model_images = to_model_images(image_urls or [])
+    if model_images:
         content: list[dict[str, Any]] = [
             {"type": "text", "text": f"{_PARSE_SYSTEM}\n\n用户描述：{text}"}
         ]
-        for url in image_urls:
+        for url in model_images:
             content.append({"type": "image_url", "image_url": {"url": url}})
         parsed = await llm.complete_json([{"role": "user", "content": content}], thinking=False)
     else:

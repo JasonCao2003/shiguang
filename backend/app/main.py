@@ -58,6 +58,16 @@ app.add_middleware(
 
 app.include_router(api_router, prefix=settings.api_prefix)
 
+# 本地存储后端：由后端静态提供 /media
+if settings.storage_backend.lower() == "local":
+    from pathlib import Path
+
+    from fastapi.staticfiles import StaticFiles
+
+    _media_dir = Path(settings.local_media_dir)
+    _media_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/media", StaticFiles(directory=str(_media_dir)), name="media")
+
 
 @app.get("/health", tags=["meta"])
 async def health() -> dict[str, str]:

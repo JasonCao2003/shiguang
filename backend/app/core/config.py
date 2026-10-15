@@ -38,12 +38,16 @@ class Settings(BaseSettings):
     embedding_model: str = "BAAI/bge-m3"
 
     # 对象存储
+    storage_backend: str = "s3"  # s3 | local
     s3_endpoint: str = "http://localhost:9000"
     s3_access_key: str = "minioadmin"
     s3_secret_key: str = "minioadmin"
     s3_bucket: str = "find-media"
     s3_region: str = "us-east-1"
     s3_public_base: str = "http://localhost:9000"
+    # 本地存储后端（STORAGE_BACKEND=local 时生效）
+    local_media_dir: str = ".data/media"
+    media_base_url: str = "http://localhost:8000/media"
 
     # 认证
     jwt_secret: str = "change-me-in-production"

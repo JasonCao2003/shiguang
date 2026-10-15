@@ -26,11 +26,14 @@ async def create_item(
 ) -> Item:
     """提交失物/招领（文字 + 图片 URL），并实时匹配。需登录。"""
     from app.agents.tools import embed_item, parse_item
+    from app.services.embedding import get_embedder
     from app.services.llm import get_llm
+    from app.services.vision import caption_images
 
     parsed = await parse_item(get_llm(), payload.description or payload.title, payload.image_urls)
 
     item = Item(
+        id=uuid.uuid4(),
         type=payload.type,
         reporter_id=user.id,
         title=payload.title,
@@ -46,12 +49,18 @@ async def create_item(
         or None,
         status=ItemStatus.active,
     )
-    captions = [parsed["caption"]] if parsed.get("caption") else []
-    item.embedding = await embed_item(item, captions)
+    # 逐图生成 caption（视觉模型）→ 送入物品向量，并单独存每图向量
+    captions = await caption_images(payload.image_urls)
+    item.embedding = await embed_item(item, [c for c in captions if c])
 
     session.add(item)
-    for url in payload.image_urls:
-        session.add(ItemImage(item_id=item.id, url=url, caption=parsed.get("caption")))
+    await session.flush()  # 确保 item 已就绪再挂图片
+    embedder = get_embedder()
+    for url, caption in zip(payload.image_urls, captions, strict=False):
+        image = ItemImage(item_id=item.id, url=url, caption=caption or None)
+        if caption:
+            image.embedding = await embedder.embed_one(caption)
+        session.add(image)
     await session.flush()
 
     await find_and_store_matches(session, item)

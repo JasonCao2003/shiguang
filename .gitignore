@@ -26,6 +26,7 @@ yarn-error.log*
 # Data / volumes
 *.sqlite3
 data/
+.data/
 minio-data/
 pgdata/
 
