@@ -104,7 +104,7 @@ class Item(Base, TimestampMixin):
     retention_delete_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     images: Mapped[list[ItemImage]] = relationship(
-        back_populates="item", cascade="all, delete-orphan"
+        back_populates="item", cascade="all, delete-orphan", lazy="selectin"
     )
 
     __table_args__ = (Index("ix_items_type_status", "type", "status"),)

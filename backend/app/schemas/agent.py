@@ -6,7 +6,15 @@ import uuid
 
 from pydantic import BaseModel, Field
 
-from app.schemas.item import MatchRead
+
+class AgentMatch(BaseModel):
+    """Agent 返回的候选匹配（非 ORM，字段较精简）。"""
+
+    id: str
+    lost_item_id: str
+    found_item_id: str
+    score: float
+    reason: str | None = None
 
 
 class ChatRequest(BaseModel):
@@ -20,7 +28,7 @@ class ChatResponse(BaseModel):
     reply: str
     intent: str | None = None
     item_id: uuid.UUID | None = None
-    matches: list[MatchRead] = Field(default_factory=list)
+    matches: list[AgentMatch] = Field(default_factory=list)
 
 
 class AgentRunSummary(BaseModel):

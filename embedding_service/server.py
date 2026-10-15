@@ -13,7 +13,11 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
-from sentence_transformers import SentenceTransformer
+
+# 必须在导入 sentence_transformers / huggingface_hub 之前设置镜像端点
+os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
+
+from sentence_transformers import SentenceTransformer  # noqa: E402
 
 MODEL_NAME = os.getenv("EMBEDDING_MODEL", "BAAI/bge-m3")
 _model: SentenceTransformer | None = None

@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, get_optional_user
+from app.api.deps import get_current_user
 from app.db.models import Item, ItemImage, ItemStatus, ItemType, Match, User
 from app.db.session import get_session
 from app.schemas.item import ItemCreate, ItemRead, MatchRead
@@ -21,10 +21,10 @@ router = APIRouter(prefix="/items", tags=["items"])
 @router.post("", response_model=ItemRead, status_code=status.HTTP_201_CREATED)
 async def create_item(
     payload: ItemCreate,
-    user: Annotated[User | None, Depends(get_optional_user)],
+    user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> Item:
-    """提交失物/招领（文字 + 图片 URL），并实时匹配。"""
+    """提交失物/招领（文字 + 图片 URL），并实时匹配。需登录。"""
     from app.agents.tools import embed_item, parse_item
     from app.services.llm import get_llm
 
@@ -32,7 +32,7 @@ async def create_item(
 
     item = Item(
         type=payload.type,
-        reporter_id=user.id if user else uuid.uuid4(),
+        reporter_id=user.id,
         title=payload.title,
         description=payload.description,
         category=payload.category or parsed.get("category") or None,

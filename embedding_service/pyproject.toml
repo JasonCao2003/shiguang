@@ -11,9 +11,15 @@ dependencies = [
     "torch>=2.2",
 ]
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+# 作为非打包项目运行（服务入口就是根目录下的 server.py）
+[tool.uv]
+package = false
 
-[tool.hatch.build.targets.wheel]
-packages = ["."]
+# 使用 CPU-only 的 PyTorch 索引，避免拉取 2~3GB 的 CUDA 依赖
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }

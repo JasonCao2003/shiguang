@@ -14,7 +14,7 @@ from app.agents import run_agent
 from app.api.deps import get_optional_user
 from app.db.models import User
 from app.db.session import get_session
-from app.schemas.agent import ChatRequest, ChatResponse, MatchRead
+from app.schemas.agent import AgentMatch, ChatRequest, ChatResponse
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -38,7 +38,7 @@ async def chat(
         reply=result.get("reply", ""),
         intent=result.get("intent"),
         item_id=uuid.UUID(result["item_id"]) if result.get("item_id") else None,
-        matches=[MatchRead(**m) for m in result.get("matches", []) if "created_at" in m],
+        matches=[AgentMatch(**m) for m in result.get("matches", [])],
     )
 
 
