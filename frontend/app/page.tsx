@@ -17,6 +17,7 @@ import {
   login,
   type Match,
   register,
+  resumeChat,
   type Claim as ClaimT,
   type ContactExchange,
   type VerificationResult,
@@ -296,11 +297,12 @@ function Chat({ onClaim }: { onClaim: (m: Match) => void }) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [matches, setMatches] = useState<Match[]>([]);
+  const [pending, setPending] = useState<string | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     boxRef.current?.scrollTo({ top: boxRef.current.scrollHeight });
-  }, [messages, busy]);
+  }, [messages, busy, pending]);
 
   function patchLast(patch: (text: string) => string) {
     setMessages((m) => {
@@ -326,12 +328,33 @@ function Chat({ onClaim }: { onClaim: (m: Match) => void }) {
             if (meta.matches?.length) setMatches(meta.matches);
           },
           onDelta: (d) => patchLast((t) => t + d),
+          onInterrupt: (payload) => {
+            const q = payload.question ?? "需要你确认后才能继续。";
+            patchLast(() => q);
+            setPending(q);
+          },
           onError: (msg) => patchLast((t) => `${t}\n（出错了：${msg}）`),
         },
         threadId,
       );
     } catch (e) {
       patchLast((t) => `${t}\n（出错了：${(e as Error).message}）`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function decide(decision: "yes" | "no") {
+    if (!threadId || busy) return;
+    setBusy(true);
+    setPending(null);
+    setMessages((m) => [...m, { role: "user", text: decision === "yes" ? "确认" : "取消" }]);
+    try {
+      const r = await resumeChat(threadId, decision);
+      setMessages((m) => [...m, { role: "assistant", text: r.reply }]);
+      if (r.interrupted && r.interrupt?.question) setPending(r.interrupt.question);
+    } catch (e) {
+      setMessages((m) => [...m, { role: "assistant", text: `（恢复失败：${(e as Error).message}）` }]);
     } finally {
       setBusy(false);
     }
@@ -355,6 +378,19 @@ function Chat({ onClaim }: { onClaim: (m: Match) => void }) {
             </div>
           ))}
         </div>
+        {pending && (
+          <div className="confirm">
+            <span>{pending}</span>
+            <div>
+              <button className="mini" onClick={() => decide("yes")} disabled={busy}>
+                确认
+              </button>
+              <button className="mini ghost" onClick={() => decide("no")} disabled={busy}>
+                取消
+              </button>
+            </div>
+          </div>
+        )}
         <label>说点什么</label>
         <textarea
           rows={2}

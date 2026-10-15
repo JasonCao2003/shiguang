@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import enum
-from typing import Annotated, Any, TypedDict
-
-from langgraph.graph.message import add_messages
+from typing import Any, TypedDict
 
 
 class Intent(str, enum.Enum):
@@ -16,10 +14,12 @@ class Intent(str, enum.Enum):
 
 
 class AgentState(TypedDict, total=False):
-    # 会话
-    messages: Annotated[list, add_messages]
+    # 会话（随 checkpointer 持久化）
     thread_id: str
     user_id: str | None
+    history: list[dict[str, str]]  # 多轮对话 [{"role","content"}]
+    decision: str | None  # HITL 恢复值
+    route_only: bool  # 仅路由不生成（流式接口复用）
 
     # 输入
     message: str

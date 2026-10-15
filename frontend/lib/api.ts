@@ -191,9 +191,26 @@ export async function exchangeContacts(claimId: string): Promise<ContactExchange
 
 // ─────────────── 对话（SSE） ───────────────
 
+export type ResumeResult = {
+  thread_id: string;
+  reply: string;
+  interrupted: boolean;
+  interrupt: { action?: string; question?: string } | null;
+};
+
+export async function resumeChat(threadId: string, decision: string): Promise<ResumeResult> {
+  const res = await fetch(`${BASE}/api/chat/resume`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ thread_id: threadId, decision }),
+  });
+  await ensureOk(res, "恢复会话");
+  return res.json();
+}
 export type StreamHandlers = {
   onMeta?: (meta: { thread_id: string; matches: Match[] }) => void;
   onDelta?: (text: string) => void;
+  onInterrupt?: (payload: { action?: string; question?: string }) => void;
   onDone?: () => void;
   onError?: (message: string) => void;
 };
@@ -237,6 +254,8 @@ export async function chatStream(
         handlers.onMeta?.(data as { thread_id: string; matches: Match[] });
       } else if (event === "delta") {
         handlers.onDelta?.(String(data.delta ?? ""));
+      } else if (event === "interrupt") {
+        handlers.onInterrupt?.(data as { action?: string; question?: string });
       } else if (event === "done") {
         handlers.onDone?.();
       } else if (event === "error") {

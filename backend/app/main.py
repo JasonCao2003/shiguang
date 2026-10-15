@@ -26,7 +26,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         ensure_bucket()
     except Exception as exc:  # noqa: BLE001 - 对象存储不可用不应阻塞启动
         logger.warning("对象存储初始化跳过: %s", exc)
+
+    # LangGraph checkpointer → 会话持久化与 HITL
+    from app.agents import build_graph, set_app
+    from app.agents.checkpointer import close_checkpointer, init_checkpointer
+
+    saver = await init_checkpointer()
+    set_app(build_graph().compile(checkpointer=saver) if saver else build_graph().compile())
+    logger.info("Agent 图已就绪（checkpointer=%s）", "on" if saver else "off")
+
     yield
+
+    await close_checkpointer()
     logger.info("关闭 %s", settings.app_name)
 
 

@@ -7,8 +7,10 @@ from __future__ import annotations
 
 import uuid
 
+from langgraph.types import interrupt
 from sqlalchemy import select
 
+from app.agents.checkpointer import get_checkpointer
 from app.agents.state import AgentState, Intent
 from app.agents.tools import classify_intent, embed_item, parse_item
 from app.core.config import settings
@@ -31,14 +33,21 @@ async def classify_node(state: AgentState) -> AgentState:
     return {"intent": intent}
 
 
+async def record_user_node(state: AgentState) -> AgentState:
+    """把用户本轮消息写入会话历史（多轮记忆）。"""
+    history = list(state.get("history") or [])
+    message = state.get("message", "")
+    if message:
+        history.append({"role": "user", "content": message})
+    return {"history": history}
+
+
 def route_by_intent(state: AgentState) -> str:
     intent = state.get("intent", Intent.other.value)
     if intent == Intent.report.value:
         return "intake"
     if intent == Intent.claim.value:
-        return "verify"
-    if intent == Intent.query.value:
-        return "chat"
+        return "review"
     return "chat"
 
 
@@ -288,26 +297,69 @@ async def retrieve_user_context(user_id: str | None, limit: int = 10) -> tuple[s
     return "\n".join(lines), matches_out
 
 
-def build_chat_messages(context: str, message: str) -> list[dict]:
+_HISTORY_LIMIT = 10
+
+
+def build_chat_messages(context: str, history: list[dict[str, str]]) -> list[dict]:
+    """拼装对话消息：system（含检索上下文）+ 最近若干轮历史。"""
     system = _CHAT_SYSTEM
     if context:
         system += f"\n\n【用户的登记与匹配记录】\n{context}"
-    return [
-        {"role": "system", "content": system},
-        {"role": "user", "content": message},
-    ]
+    messages: list[dict] = [{"role": "system", "content": system}]
+    messages.extend(history[-_HISTORY_LIMIT:])
+    return messages
 
 
 async def chat_node(state: AgentState) -> AgentState:
     llm = get_llm()
     context, matches = await retrieve_user_context(state.get("user_id"))
-    messages = build_chat_messages(context, state.get("message", ""))
+    # route_only：仅做路由/检索，不生成回复（供流式接口复用同一张图）
+    if state.get("route_only"):
+        return {"matches": matches, "status": "routed"}
+    messages = build_chat_messages(context, state.get("history") or [])
     reply = await llm.complete(messages, thinking=False)
     return {"reply": reply, "status": "answered", "matches": matches}
 
 
+# ─────────────────────────── HITL（认领前人工确认）───────────────────────────
+
+
+async def human_review_node(state: AgentState) -> AgentState:
+    """认领前的人工确认。
+
+    有 checkpointer 时用 `interrupt()` 暂停，等待外部用 `Command(resume=...)` 恢复；
+    无持久化时无法暂停，直接放行。
+    """
+    decision = state.get("decision")
+    if decision is not None:
+        return {"decision": decision}
+    if get_checkpointer() is None:
+        return {"decision": "yes"}
+
+    resumed = interrupt(
+        {"action": "claim", "question": "确认要发起认领吗？回复 yes 继续，no 取消。"}
+    )
+    return {"decision": str(resumed)}
+
+
+async def claim_node(state: AgentState) -> AgentState:
+    """按人工确认结果处理认领请求。"""
+    decision = (state.get("decision") or "").strip().lower()
+    if decision not in {"yes", "y", "true", "确认", "是"}:
+        return {"reply": "已取消认领。", "status": "cancelled"}
+    return {
+        "reply": "已受理你的认领请求。请到「认领」页选择对应匹配，完成核验问答后即可交换联系方式。",
+        "status": "claiming",
+    }
+
+
 async def finish_node(state: AgentState) -> AgentState:
-    return {"status": state.get("status", "done")}
+    """收尾：把助手回复写入历史。"""
+    history = list(state.get("history") or [])
+    reply = state.get("reply")
+    if reply:
+        history.append({"role": "assistant", "content": reply})
+    return {"status": state.get("status", "done"), "history": history}
 
 
 def match_status_of(score: float) -> MatchStatus:

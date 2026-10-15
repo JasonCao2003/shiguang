@@ -29,6 +29,21 @@ class ChatResponse(BaseModel):
     intent: str | None = None
     item_id: uuid.UUID | None = None
     matches: list[AgentMatch] = Field(default_factory=list)
+    # HITL
+    interrupted: bool = False
+    interrupt: dict | None = None
+
+
+class ResumeRequest(BaseModel):
+    thread_id: str
+    decision: str
+
+
+class ThreadState(BaseModel):
+    thread_id: str
+    history: list[dict] = Field(default_factory=list)
+    status: str | None = None
+    interrupted: bool = False
 
 
 class AgentRunSummary(BaseModel):

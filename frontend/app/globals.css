@@ -278,3 +278,27 @@ ul.items li:last-child {
   border: 1px solid var(--border);
 }
 
+/* HITL 确认 */
+.confirm {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid #78350f;
+  background: #1f1508;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 14px;
+}
+
+.confirm button.mini {
+  margin-left: 8px;
+}
+
+button.mini.ghost {
+  border-color: var(--border);
+  color: var(--muted);
+}
+
