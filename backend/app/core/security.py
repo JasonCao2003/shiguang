@@ -5,20 +5,28 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import bcrypt
 import jwt
-from passlib.context import CryptContext
 
 from app.core.config import settings
 
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# bcrypt 仅使用前 72 字节；显式截断以避免新版 bcrypt 抛错
+_MAX_BCRYPT_BYTES = 72
+
+
+def _encode(password: str) -> bytes:
+    return password.encode("utf-8")[:_MAX_BCRYPT_BYTES]
 
 
 def hash_password(password: str) -> str:
-    return _pwd_context.hash(password)
+    return bcrypt.hashpw(_encode(password), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return _pwd_context.verify(plain, hashed)
+    try:
+        return bcrypt.checkpw(_encode(plain), hashed.encode("utf-8"))
+    except ValueError:
+        return False
 
 
 def create_access_token(subject: str, extra: dict[str, Any] | None = None) -> str:
